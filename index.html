@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Predictor Budget</title>
+<meta name="description" content="How many candidate predictor parameters can a prediction model developed on your cohort support? Riley et al.'s minimum sample size criteria (pmsampsize), worked backwards, for Cox and logistic models.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script type="module" src="assets/app.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Clinical prediction models · Riley et al. criteria · pmsampsize</div>
+    <h1>Predictor Budget</h1>
+    <p class="lede">In a retrospective or routinely collected cohort the sample size is already fixed. The question becomes how many candidate predictors you can afford. Answer four questions and this tool works Riley's minimum sample size criteria backwards to give you that number.</p>
+  </header>
+
+  <noscript><p class="msg bad">This calculator needs JavaScript.</p></noscript>
+
+  <div class="grid">
+    <form class="panel inputs" id="form" autocomplete="off" novalidate>
+      <div class="example" id="exampleBanner">
+        <span>Showing an example. Replace it with your own cohort.</span>
+        <button type="button" id="resetBtn">Reset example</button>
+      </div>
+
+      <!-- 1 -->
+      <section class="step" aria-labelledby="st1">
+        <h3 id="st1"><span class="num">1</span>What kind of outcome?</h3>
+        <div class="seg" role="radiogroup" aria-labelledby="st1">
+          <label><input type="radio" name="outcome" value="s">Time to event<small>Cox model · OS, PFS, recurrence</small></label>
+          <label><input type="radio" name="outcome" value="b">Yes / no<small>Logistic model · e.g. 30-day mortality</small></label>
+        </div>
+        <span class="hint">For a continuous outcome use <code>pmsampsize(type = "c")</code> in R directly. If everyone is followed to a fixed time with no censoring, a binary model is usually the right choice.</span>
+      </section>
+
+      <!-- 2 -->
+      <section class="step" aria-labelledby="st2">
+        <h3 id="st2"><span class="num">2</span>Your cohort</h3>
+        <div class="row2">
+          <div class="field"><label for="n">Patients</label><input type="number" id="n" min="1" step="1" inputmode="numeric"></div>
+          <div class="field"><label for="events" id="eventsLabel">Outcome events</label><input type="number" id="events" min="1" step="1" inputmode="numeric"></div>
+        </div>
+        <div class="row2" data-outcome="s">
+          <div class="field"><label for="py">Total follow-up (years)</label><input type="number" id="py" min="0" step="any" inputmode="decimal"></div>
+          <div class="field"><label for="tp">Prediction horizon (years)</label><input type="number" id="tp" min="0" step="any" inputmode="decimal"></div>
+        </div>
+        <span class="hint" data-outcome="s">Total follow-up is the sum of every patient's time to event or censoring. The horizon is the time your predictions are for, such as 2-year or 5-year survival. Neither changes the parameter budget; they only feed the precision check.</span>
+        <span class="hint" data-outcome="b">Count only patients whose outcome is known. Events are the patients who had the outcome.</span>
+        <details>
+          <summary>How do I get these numbers from my data?</summary>
+          <div class="body">
+            <pre id="howto"></pre>
+            <span class="hint" data-outcome="s">Use the same outcome definition and censoring as the model you will fit. If you have competing risks, this calculation does not account for them.</span>
+          </div>
+        </details>
+      </section>
+
+      <!-- 3 -->
+      <section class="step" aria-labelledby="st3">
+        <h3 id="st3"><span class="num">3</span>How well might the model perform?</h3>
+        <span class="hint">The criteria need an anticipated R². Pick what you have; the tool converts it.</span>
+        <div class="choices" role="radiogroup" aria-labelledby="st3">
+          <label class="choice"><input type="radio" name="source" value="none"><span><b>Nothing reliable yet</b><span>Use Riley's conservative default, a Nagelkerke R² of 0.15.</span></span></label>
+          <label class="choice"><input type="radio" name="source" value="lr"><span><b>A previous model's likelihood-ratio test</b><span>The LR χ² from a <code>coxph</code> or <code>glm</code> summary, e.g. a simpler base model.</span></span></label>
+          <label class="choice"><input type="radio" name="source" value="reported"><span><b>A published R²</b><span>Nagelkerke or Cox-Snell, from a paper or your own earlier model.</span></span></label>
+          <label class="choice"><input type="radio" name="source" value="cstat"><span><b>A published C statistic</b><span id="cstatDesc">Harrell's C-index of a similar model.</span></span></label>
+        </div>
+
+        <div class="sub" data-source="none">
+          <div class="field"><label for="nagDefault">Nagelkerke R²</label><input type="number" id="nagDefault" min="0.01" max="0.99" step="0.01">
+            <span class="hint">0.15 is conservative for most clinical models. Riley et al. note that higher values can be justified when predictors include direct measurements of the outcome.</span></div>
+        </div>
+        <div class="sub" data-source="lr">
+          <div class="field"><label for="lrStat">Likelihood-ratio χ²</label><input type="number" id="lrStat" min="0" step="any">
+            <span class="hint">In R: <code>summary(fit)$logtest</code> for <code>coxph</code>, or null deviance − residual deviance for <code>glm</code>.</span></div>
+        </div>
+        <div class="sub" data-source="reported">
+          <div class="row2">
+            <div class="field"><label for="repValue">R² value</label><input type="number" id="repValue" min="0" max="1" step="any"></div>
+            <div class="field"><label for="repScale">Which R²?</label><select id="repScale"><option value="nag">Nagelkerke</option><option value="cs">Cox-Snell</option></select></div>
+          </div>
+          <div class="field"><label for="repApparent">Where was it measured?</label>
+            <select id="repApparent">
+              <option value="app">On the data the model was built on (apparent)</option>
+              <option value="adj">Optimism-corrected, or in a validation cohort</option>
+            </select>
+            <span class="hint">Apparent R² is too optimistic, so it is shrunk using the previous model's size. Most papers report apparent values unless they say "optimism-corrected" or "bootstrap".</span></div>
+        </div>
+        <div class="sub" data-source="cstat">
+          <div class="field"><label for="cValue" id="cLabel">C statistic</label><input type="number" id="cValue" min="0.5" max="1" step="0.01"></div>
+          <span class="hint" data-outcome="b">Converted to a Cox-Snell R² at your cohort's outcome rate, as pmsampsize does. This conversion is approximate, to about ±0.001.</span>
+          <span class="hint" data-outcome="s">Converted with Riley et al.'s chain: C → Royston's D → R²<sub>D</sub> → O'Quigley R² → LR χ², then shrunk for optimism. It needs the previous study's size.</span>
+        </div>
+
+        <div class="sub" id="srcStudy">
+          <span class="lbl">About the model that number came from</span>
+          <div class="row3">
+            <div class="field"><label for="srcN">Patients</label><input type="number" id="srcN" min="1" step="1"></div>
+            <div class="field"><label for="srcEvents">Events</label><input type="number" id="srcEvents" min="1" step="1"></div>
+            <div class="field" id="srcPField"><label for="srcP" id="srcPLabel">Parameters</label><input type="number" id="srcP" min="1" step="1"></div>
+          </div>
+        </div>
+
+        <div class="derived" id="baseOut" aria-live="polite"></div>
+
+        <details>
+          <summary>More options: sensitivity values, R² scale, shrinkage</summary>
+          <div class="body">
+            <label class="check"><input type="checkbox" id="sens"> Also try R² 20% lower and 20% higher</label>
+            <div class="field"><label for="extra">Other R² values to try</label><input type="text" id="extra" inputmode="decimal" placeholder="e.g. 0.10, 0.12">
+              <span class="hint">Comma-separated, on the scale below.</span></div>
+            <div class="field"><label for="scale">Carry R² into your cohort as</label>
+              <select id="scale"><option value="nag">Nagelkerke (rescaled to your event rate)</option><option value="cs">Cox-Snell (unchanged)</option></select>
+              <span class="hint">pmsampsize rescales Nagelkerke R² by your cohort's maximum Cox-Snell R². When the previous study's event rate differs from yours, the two choices give different answers; Cox-Snell is the more cautious one when your events are more frequent.</span></div>
+            <div class="field"><label for="shrink">Target shrinkage</label><input type="number" id="shrink" min="0.5" max="0.99" step="0.01">
+              <span class="hint">0.9 is the recommended default: expected overfitting of 10% or less.</span></div>
+          </div>
+        </details>
+      </section>
+
+      <!-- 4 -->
+      <section class="step" aria-labelledby="st4">
+        <h3 id="st4"><span class="num">4</span>Which candidate predictors?</h3>
+        <span class="hint">List everything you might put in the model before any selection, including variables you expect to drop. Screening predictors on the outcome data does not reduce the count.</span>
+        <span class="hint"><b>Form:</b> yes/no and linear terms use 1 df. Splines use knots − 1. Categorical uses levels − 1. FP1 and FP2 (fractional polynomials) use 2 and 4. Use "Other df" for interactions or anything else.</span>
+        <div class="preds">
+          <div class="pred pred-head" aria-hidden="true"><span>Predictor</span><span>Form</span><span>Levels / knots</span><span>df</span><span></span></div>
+          <div id="predList" class="preds"></div>
+        </div>
+        <div class="btnrow"><button type="button" id="addPred">Add predictor</button></div>
+        <div class="total"><span>Candidate parameters</span><b id="predTotal">0</b></div>
+        <div class="field"><label for="plannedOverride">Or type the total directly</label><input type="number" id="plannedOverride" min="1" step="1" placeholder="Leave blank to use the list">
+        </div>
+      </section>
+    </form>
+
+    <div class="results">
+      <section class="panel verdict" aria-live="polite" aria-labelledby="verdictHead">
+        <p class="headline" id="verdictHead"></p>
+        <div class="pills" id="verdictPills"></div>
+        <p id="verdictText"></p>
+        <div class="msgs" id="errors"></div>
+        <div class="facts" id="facts"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-table">
+        <div class="secthead"><h2 id="h-table">Budget at each R²</h2><p>Select a row to see its breakdown.</p></div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr>
+              <th>R²</th><th>Cox-Snell R² used</th><th>Max parameters</th><th>Patients needed at max</th>
+              <th>Patients needed for one more</th><th>Events per parameter at max</th><th>Limited by</th>
+            </tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-chart">
+        <div class="secthead"><h2 id="h-chart">Patients needed as parameters grow</h2><p>Supported while a line stays at or below your cohort.</p></div>
+        <div class="chart" id="chart"></div>
+        <div class="legend" id="legend"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-detail">
+        <div class="secthead"><h2 id="h-detail">Breakdown</h2><p id="detailSub"></p></div>
+        <div class="cards" id="cards"></div>
+        <div class="tablewrap" style="margin-top:16px">
+          <table>
+            <thead><tr><th>Criterion</th><th>Patients</th><th>Shrinkage</th><th>Events</th><th>Events per parameter</th></tr></thead>
+            <tbody id="detail"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel prose" id="advice" aria-labelledby="h-advice">
+        <h2 id="h-advice">If you're over budget</h2>
+        <ol>
+          <li><b>Cut candidates on prior knowledge, before touching the outcome data.</b> Use clinical reasoning and the literature to drop predictors that are unlikely to add much, are hard to measure, or overlap with others (Riley et al. 2020).</li>
+          <li><b>Spend fewer degrees of freedom per predictor.</b> Use fewer spline knots or linear terms for weaker predictors, merge sparse categories, and leave out interactions that aren't pre-specified (Harrell 2015, ch. 4).</li>
+          <li><b>Reduce data without looking at the outcome.</b> Combine correlated predictors into a summary score or principal component chosen blind to the outcome (Harrell 2015, ch. 4).</li>
+          <li><b>Don't count on penalisation to rescue a small sample.</b> Lasso, ridge and similar methods shrink in the right direction on average, but the amount of shrinkage is itself unreliable when data are small (Riley et al. 2021; Van Calster et al. 2020).</li>
+          <li><b>Consider updating or validating an existing model</b> instead of developing a new one, or pooling with other cohorts (Riley et al. 2020).</li>
+        </ol>
+      </section>
+
+      <section class="panel" aria-labelledby="h-r">
+        <div class="secthead"><h2 id="h-r">Reproduce in R</h2>
+          <div class="btnrow"><button type="button" id="linkBtn">Copy link to this calculation</button><button type="button" id="copyBtn">Copy code</button></div></div>
+        <pre id="rcode"></pre>
+      </section>
+
+      <section class="panel prose" aria-labelledby="h-notes">
+        <h2 id="h-notes">How this works</h2>
+        <ul>
+          <li><b>Criterion 1</b> keeps expected overfitting small: the model's uniform shrinkage factor should be at least 0.9. <b>Criterion 2</b> keeps apparent and adjusted Nagelkerke R² within 0.05 of each other. <b>Criterion 3</b> asks for a precise estimate of overall risk. For binary outcomes it sets a minimum number of patients. For survival it only checks the precision of the risk at your horizon and never raises the sample size.</li>
+          <li><b>A parameter is a degree of freedom.</b> A binary or linear predictor uses 1. A categorical predictor with k levels uses k − 1. A restricted cubic spline with k knots uses k − 1. Fractional polynomials count each power estimated: FP1 is 2 and FP2 is 4. Every interaction adds its own.</li>
+          <li><b>Working backwards.</b> For each R², the tool raises the number of parameters one at a time until the required sample size exceeds your cohort. The last count that fits is your budget.</li>
+          <li><b>R² from a previous model</b> is shrunk for optimism with van Houwelingen's heuristic, S = 1 − df / LR, and R²<sub>CS,adj</sub> = S × R²<sub>CS,app</sub> (Riley et al. 2019, eqs. 3–8).</li>
+          <li><b>Accuracy.</b> The criteria reproduce <code>pmsampsize</code> 1.1.3 exactly. They are tested against the R package on 685 input combinations, and on the worked examples in Riley et al. 2019. The binary C-statistic conversion is a deterministic version of pmsampsize's simulation and agrees with it to about ±0.001.</li>
+        </ul>
+        <p class="cite">Riley RD et al. <a href="https://www.bmj.com/content/368/bmj.m441">Calculating the sample size required for developing a clinical prediction model</a>. BMJ 2020;368:m441.<br>
+          Riley RD et al. <a href="https://doi.org/10.1002/sim.7992">Minimum sample size for developing a multivariable prediction model: Part II, binary and time-to-event outcomes</a>. Stat Med 2019;38:1276–96.<br>
+          Riley RD et al. <a href="https://doi.org/10.1016/j.jclinepi.2020.12.005">Penalization and shrinkage methods produced unreliable clinical prediction models especially when sample size is small</a>. J Clin Epidemiol 2021;132:88–96.<br>
+          Van Calster B et al. <a href="https://doi.org/10.1177/0962280220921415">Regression shrinkage methods for clinical prediction models do not guarantee improved performance</a>. Stat Methods Med Res 2020;29:3166–78.<br>
+          Harrell FE. Regression Modeling Strategies, 2nd ed. Springer, 2015.<br>
+          Ensor J, Martin EC, Riley RD. <a href="https://CRAN.R-project.org/package=pmsampsize">pmsampsize</a>: R package.</p>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <span>Runs entirely in your browser. Nothing you type is sent anywhere.</span>
+    <span>A JavaScript port of pmsampsize (Ensor, Martin &amp; Riley), released under GPL-3.0-or-later. <a href="https://github.com/satsumalab/predictor-budget">Source and tests on GitHub</a>.</span>
+  </footer>
+</div>
+</body>
+</html>
