@@ -38,7 +38,9 @@ For each anticipated R² value, find the largest number of candidate parameters 
 - Maximum Cox-Snell R² for a study with E events among n (used to convert to Nagelkerke):
   - survival: 1 − exp(2(E ln(E/n) − E)/n)
   - binary: 1 − exp(2(E ln(E/n) + (n − E) ln(1 − E/n))/n)
-- Carry a previous study's R² into the new cohort either as Nagelkerke (`nagrsquared`, which pmsampsize rescales to the new event rate) or as Cox-Snell (`csrsquared`, unchanged). Say which one you used.
+- Carry a previous study's R² into the new cohort as Cox-Snell (`csrsquared`, unchanged) whenever the source gives one (options 2, 3 with Cox-Snell, and 4), as in Riley et al.'s worked examples. Use Nagelkerke (`nagrsquared`, which pmsampsize rescales to the new event rate) only for the 0.15 default or a reported Nagelkerke value. Say which one you used.
+- Caveat for survival: the maximum Cox-Snell R² (used for the Nagelkerke conversion and criterion 2) is not uniquely defined. pmsampsize uses E ln(E/n) − E. Riley et al. 2019's worked example uses person-time, E ln(E/T) + E, and prints a smaller maximum: 0.37 vs pmsampsize's 0.555 on its VTE example. Follow pmsampsize for reproducibility, and tell the user that survival results from a Nagelkerke R² are approximate.
+- Binary C statistic: pmsampsize applies no optimism shrinkage, so ask for an optimism-corrected or external-validation AUC. Its seeded simulation can give sample sizes up to about 2% higher than the exact large-sample conversion.
 
 ## Counting parameters
 

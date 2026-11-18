@@ -1,0 +1,47 @@
+cff-version: 1.2.0
+message: "If you use this tool, please cite it, and also cite the methods it implements (Riley et al.) and pmsampsize."
+title: "Predictor Budget: Riley et al.'s minimum sample size criteria worked backwards for fixed cohorts"
+type: software
+authors:
+  - given-names: Daryl
+    family-names: Cheng
+  - name: Satsuma Lab
+license: GPL-3.0-or-later
+version: 1.0.0
+date-released: "2026-11-18"
+repository-code: "https://github.com/satsumalab/predictor-budget"
+url: "https://satsumalab.github.io/predictor-budget/"
+keywords: [prediction models, sample size, pmsampsize, survival analysis, logistic regression]
+references:
+  - type: article
+    title: "Calculating the sample size required for developing a clinical prediction model"
+    authors:
+      - family-names: Riley
+        given-names: Richard D.
+    journal: BMJ
+    volume: 368
+    start: m441
+    year: 2020
+    doi: 10.1136/bmj.m441
+  - type: article
+    title: "Minimum sample size for developing a multivariable prediction model: Part II - binary and time-to-event outcomes"
+    authors:
+      - family-names: Riley
+        given-names: Richard D.
+    journal: Statistics in Medicine
+    volume: 38
+    start: 1276
+    end: 1296
+    year: 2019
+    doi: 10.1002/sim.7992
+  - type: software
+    title: pmsampsize
+    authors:
+      - family-names: Ensor
+        given-names: Joie
+      - family-names: Martin
+        given-names: Emma C.
+      - family-names: Riley
+        given-names: Richard D.
+    url: "https://CRAN.R-project.org/package=pmsampsize"
+    version: 1.1.3

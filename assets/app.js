@@ -31,7 +31,7 @@ const EXAMPLE = Object.freeze({
   outcome: "s", n: 500, events: 60, py: 2600, tp: 5,
   source: "none", nagDefault: 0.15, lrStat: 26.4, repValue: 0.2, repScale: "nag", repApparent: "app", cValue: 0.72,
   srcN: 400, srcEvents: 38, srcP: 5,
-  sens: true, extra: "", scale: "nag", shrink: 0.9, plannedOverride: "",
+  sens: true, extra: "", scale: "auto", shrink: 0.9, plannedOverride: "",
   predictors: [
     { name: "Age", kind: "spline", k: 3 }, { name: "Sex", kind: "binary" }, { name: "Stage", kind: "categorical", k: 4 },
     { name: "Performance status", kind: "categorical", k: 3 }, { name: "BMI", kind: "linear" },
@@ -41,6 +41,7 @@ const EXAMPLE = Object.freeze({
 let state = loadFromHash() || structuredClone(EXAMPLE);
 let lang = (() => { try { return localStorage.getItem("pb-lang") === "py" ? "py" : "r"; } catch { return "r"; } })();
 let selected = null; // R² value of the selected table row
+let curScale = "nag"; // resolved R² scale of the current calculation
 
 // ---------------------------------------------------------------- form <-> state
 function writeForm() {
@@ -164,7 +165,10 @@ function compute(s) {
   } catch (e) { errs.push(e.message); bad.add(s.source === "lr" ? "lrStat" : s.source === "cstat" ? "cValue" : "repValue"); }
 
   // the R² values to evaluate
-  const scale = s.scale === "cs" ? "cs" : "nag";
+  // "auto": carry Cox-Snell across whenever the source gives one (no maximum-R² conversion needed);
+  // Nagelkerke only for the 0.15 default and a reported Nagelkerke value.
+  const scale = s.scale === "cs" || s.scale === "nag" ? s.scale
+    : (s.source === "none" || (s.source === "reported" && s.repScale === "nag")) ? "nag" : "cs";
   const rnd = v => P.roundTo(v, scale === "nag" ? 3 : 4);
   let r2s = [];
   if (base && base[scale] != null) {
@@ -210,6 +214,7 @@ const critName = { 1: "Criterion 1 · overfitting", 2: "Criterion 2 · R² optim
 function render() {
   readForm();
   const s = state, out = compute(s), isS = s.outcome === "s";
+  curScale = out.scale;
   writeHash();
 
   // visibility and labels
@@ -244,6 +249,7 @@ function render() {
   renderChart(out);
   renderDetail(out, rows.find(r => r.v === selected));
   renderR(out);
+  renderMethods(out);
 }
 
 function renderBase(out) {
@@ -256,7 +262,10 @@ function renderBase(out) {
   if (c && c.approx) lines.push(`Cox-Snell R² at your outcome rate ≈ <b>${fmt(c.r2csAdj, 4)}</b>`);
   else if (c) lines.push(`R²<sub>CS,adj</sub> = <b>${fmt(c.r2csAdj, 4)}</b> · Nagelkerke = <b>${fmt(c.nag, 3)}</b>`);
   else lines.push(`Nagelkerke = <b>${fmt(b.nag, 3)}</b>${b.cs != null ? ` · Cox-Snell in your cohort = ${fmt(b.cs, 4)}` : ""}`);
-  lines.push(`Base case used: <b>${out.scale === "nag" ? "Nagelkerke" : "Cox-Snell"} ${fmt(P.roundTo(b[out.scale] ?? NaN, out.scale === "nag" ? 3 : 4), out.scale === "nag" ? 3 : 4)}</b>`);
+  lines.push(`Base case used: <b>${out.scale === "nag" ? "Nagelkerke" : "Cox-Snell"} ${fmt(P.roundTo(b[out.scale] ?? NaN, out.scale === "nag" ? 3 : 4), out.scale === "nag" ? 3 : 4)}</b>` +
+    (out.scale === "cs" && s.source !== "none" ? " (carried across unchanged)" : ""));
+  if (out.outcome === "s" && out.scale === "nag")
+    lines.push(`<span style="color:var(--warn)">Survival + Nagelkerke: the result depends on how the maximum R² is defined, and pmsampsize differs from Riley et al.'s worked example. See "How this works".</span>`);
   $("baseOut").innerHTML = lines.join("<br>");
 }
 
@@ -310,7 +319,7 @@ function renderFacts(out) {
 
 function rowLabel(r) {
   const tag = r.role === "base" ? `<span class="tag base">base case</span>` : r.role ? `<span class="tag">${r.role}</span>` : "";
-  return `<span class="swatch" style="background:var(${SERIES[r.i]})"></span>${fmt(r.v, state.scale === "cs" ? 4 : 3)}${tag}`;
+  return `<span class="swatch" style="background:var(${SERIES[r.i]})"></span>${fmt(r.v, curScale === "cs" ? 4 : 3)}${tag}`;
 }
 function renderTable(out) {
   $("rows").innerHTML = out.rows.map(r => {
@@ -441,6 +450,39 @@ data.frame(r2 = r2, max_parameters = sapply(r2, max_p))
 do.call(pmsampsize, c(args, list(${arg} = ${fmt(base.v, d)}, parameters = ${K})))${cNote}`;
 }
 
+function renderMethods(out) {
+  const c = out.cohort, s = state, ch = out.chain;
+  const baseRow = out.rows.find(r => r.role === "base");
+  if (!c || !baseRow || baseRow.error) { $("methodsText").textContent = "Fill in the inputs to generate methods text."; return; }
+  const isS = out.outcome === "s";
+  const sh = ch && ch.S != null ? `, adjusted for optimism with van Houwelingen's heuristic shrinkage factor (S = ${fmt(ch.S)})` : "";
+  const prevIn = `n = ${s.srcN}, ${s.srcEvents} events`, prev = `(${prevIn})`;
+  const src = {
+    none: `the conservative default recommended by Riley et al. in the absence of prior information`,
+    lr: `the likelihood-ratio statistic of a previous model (χ² = ${s.lrStat} on ${s.srcP} df; ${prevIn})${sh}`,
+    reported: `a reported ${s.repApparent === "app" ? "apparent" : "optimism-corrected"} ${s.repScale === "nag" ? "Nagelkerke" : "Cox-Snell"} R² of ${s.repValue} from a previous model ${prev}${sh}`,
+    cstat: isS
+      ? `a reported Harrell's C of ${s.cValue} from a previous model (${prevIn}; ${s.srcP} parameters), converted to an R² following Riley et al. (2019)${sh}`
+      : `a reported C statistic of ${s.cValue}, converted to an approximate Cox-Snell R² at the observed prevalence as in pmsampsize`,
+  }[s.source];
+  const r2txt = out.scale === "cs"
+    ? `a Cox-Snell R² of ${fmt(baseRow.v, 4)}`
+    : `a Nagelkerke R² of ${fmt(baseRow.v, 3)} (Cox-Snell R² ${fmt(baseRow.next.r2cs, 3)} in this cohort)`;
+  const ok = out.rows.filter(r => !r.error).map(r => r.p);
+  const lo = Math.min(...ok), hi = Math.max(...ok);
+  const sens = s.sens && lo !== hi ? ` (sensitivity analysis with R² 20% lower and higher: ${lo} to ${hi})` : "";
+  const cohort = isS
+    ? `${c.n} patients with ${c.events} outcome events over ${c.py} person-years (mean follow-up ${fmt(c.meanfup, 2)} years; prediction horizon ${c.tp} years)`
+    : `${c.n} patients, ${c.events} of whom had the outcome (prevalence ${pct(c.prevalence)})`;
+  const budget = baseRow.p === 0
+    ? `this cohort is too small to support even one candidate predictor parameter`
+    : `this cohort supports at most ${plural(baseRow.p, "candidate predictor parameter")}${sens}`;
+  const K = out.planned;
+  const planned = K == null ? "" : ` The planned model has ${plural(K, "candidate parameter")}, which is ${K <= baseRow.p ? "within" : "more than"} this budget.`;
+  $("methodsText").textContent =
+    `The minimum sample size criteria of Riley et al. for developing a ${isS ? "time-to-event" : "binary outcome"} prediction model were applied in reverse to find the maximum number of candidate predictor parameters the available data support, using pmsampsize (version 1.1.3). The cohort comprised ${cohort}. The anticipated model performance was based on ${src}, giving ${r2txt}. With a target shrinkage factor of ${out.shrink}, ${budget}.${planned}`;
+}
+
 function pythonCode({ out, c, s, arg, d, r2, base, K }) {
   // pmsampsize 0.1.0 calls a bare exp() on the survival + Nagelkerke path (NameError); patch it in.
   const patch = out.outcome === "s" && out.scale === "nag"
@@ -508,6 +550,7 @@ document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click"
   render();
 }));
 $("copyBtn").addEventListener("click",() => copy($("rcode").textContent, $("copyBtn"), "Copied"));
+$("methodsCopy").addEventListener("click", () => copy($("methodsText").textContent, $("methodsCopy"), "Copied"));
 $("aiCopy").addEventListener("click", () => copy($("aiPrompt").textContent.replace(/\n(?=\S)/g, " "), $("aiCopy"), "Copied"));
 $("linkBtn").addEventListener("click",() => copy(location.href, $("linkBtn"), "Link copied"));
 $("resetBtn").addEventListener("click", () => { state = structuredClone(EXAMPLE); selected = null; writeForm(); render(); });

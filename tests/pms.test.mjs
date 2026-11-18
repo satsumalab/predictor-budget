@@ -93,3 +93,45 @@ test("qnorm", () => {
   assert.ok(Math.abs(P.qnorm(0.975) - 1.959963984540054) < 1e-8);
   assert.ok(Math.abs(P.qnorm(0.01) + 2.326347874040841) < 1e-8);
 });
+
+test("binary C statistic: closed form equals the mean of pmsampsize's simulation over seeds", () => {
+  for (const r of fx.cstat_seeds) {
+    const got = P.cstatToR2Binary(r.C, r.prev);
+    assert.ok(Math.abs(got - r.mean) < 0.0002, `C=${r.C} prev=${r.prev}: ${got} vs seed mean ${r.mean} (sd ${r.sd})`);
+  }
+});
+
+test("binary C statistic: sample sizes within 2% of pmsampsize's cstatistic= route (its default seed)", () => {
+  // pmsampsize's default seed (123456) gives an R² about 1.5 Monte Carlo SDs low at these settings,
+  // so R's sample sizes run up to ~2% higher than the large-sample value used here.
+  for (const r of fx.cstat_budget) {
+    const cs = P.roundTo(P.cstatToR2Binary(r.C, r.prev), 4);
+    const n = P.pmsampsize({ type: "b", csrsquared: cs, parameters: r.p, prevalence: r.prev }).sampleSize;
+    assert.ok(Math.abs(n - r.n) / r.n <= 0.02, `C=${r.C} prev=${r.prev} p=${r.p}: ${n} vs R ${r.n}`);
+  }
+});
+
+test("reported apparent R² gives the same answer as the equivalent likelihood ratio", () => {
+  for (const [outcome, n, events, p] of [["s", 400, 38, 5], ["b", 600, 120, 8]]) {
+    const maxR2 = P.studyMaxR2cs(outcome, events, n);
+    const nag = 0.2, app = nag * maxR2, LR = -n * Math.log(1 - app);
+    const a = P.fromReportedR2({ outcome, value: nag, scale: "nag", apparent: true, n, events, p });
+    const b = P.fromLikelihoodRatio({ outcome, LR, df: p, n, events });
+    assert.ok(Math.abs(a.r2csAdj - b.r2csAdj) < 1e-12 && Math.abs(a.S - b.S) < 1e-12);
+    const c = P.fromReportedR2({ outcome, value: app, scale: "cs", apparent: true, n, events, p });
+    assert.ok(Math.abs(c.r2csAdj - b.r2csAdj) < 1e-12);
+  }
+});
+
+test("reported optimism-corrected R² is used as given", () => {
+  const o = P.fromReportedR2({ outcome: "s", value: 0.05, scale: "cs", apparent: false, n: 400, events: 38 });
+  assert.equal(o.r2csAdj, 0.05);
+  assert.equal(o.S, null);
+  assert.throws(() => P.fromReportedR2({ outcome: "s", value: 0.99, scale: "cs", apparent: false, n: 400, events: 38 }), P.InputError);
+});
+
+test("survival max R²: pmsampsize's events/n form, not the paper's person-time form", () => {
+  // Riley 2019 VTE example (E = 161, n = 1200, T = 2483): the paper prints 0.37; pmsampsize gives 0.555.
+  const o = P.pmsampsize({ type: "s", csrsquared: 0.051, parameters: 25, rate: 0.065, timepoint: 2, meanfup: 2.07 });
+  assert.equal(o.maxR2cs.toFixed(3), "0.555");
+});

@@ -37,7 +37,20 @@ cst_out <- lapply(seq_len(nrow(cst)), function(i)
   list(C = cst$C[i], prev = cst$prev[i],
        r2 = pmsampsize:::cstat2rsq(cstatistic = cst$C[i], prevalence = cst$prev[i])$R2.coxsnell))
 
+# Binary sample sizes via pmsampsize's own C-statistic route (seeded simulation)
+cb <- expand.grid(C = c(0.65, 0.75, 0.85), prev = c(0.1, 0.3), p = c(2, 8))
+cb_out <- lapply(seq_len(nrow(cb)), function(i)
+  list(C = cb$C[i], prev = cb$prev[i], p = cb$p[i],
+       n = quiet(pmsampsize(type = "b", cstatistic = cb$C[i], prevalence = cb$prev[i], parameters = cb$p[i]))$sample_size))
+
+# Monte Carlo mean of cstat2rsq over 10 seeds (the large-sample value our closed form targets)
+cs_seeds <- expand.grid(C = c(0.65, 0.75, 0.85), prev = c(0.1, 0.3))
+cs_seeds_out <- lapply(seq_len(nrow(cs_seeds)), function(i) {
+  v <- sapply(1:10, function(sd) pmsampsize:::cstat2rsq(cs_seeds$C[i], cs_seeds$prev[i], seed = sd)$R2.coxsnell)
+  list(C = cs_seeds$C[i], prev = cs_seeds$prev[i], mean = mean(v), sd = sd(v))
+})
+
 write_json(list(version = as.character(packageVersion("pmsampsize")),
-                survival = surv_out, binary = bin_out, cstat = cst_out),
+                survival = surv_out, binary = bin_out, cstat = cst_out, cstat_budget = cb_out, cstat_seeds = cs_seeds_out),
            "tests/fixtures.json", auto_unbox = TRUE, digits = NA, na = "null")
 cat("wrote", length(surv_out), "survival,", length(bin_out), "binary,", length(cst_out), "C-statistic rows\n")
