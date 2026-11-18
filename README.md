@@ -34,6 +34,10 @@ Rscript tests/make_fixtures.R     # regenerate fixtures (needs pmsampsize, jsonl
 python3 -m http.server            # then open http://localhost:8000
 ```
 
+### AI coding assistants
+
+[`llms.txt`](https://satsumalab.github.io/predictor-budget/llms.txt) is a plain-text guide for AI assistants. It covers the method, how to derive each input, parameter counting, and tested R and Python templates, so an assistant can add the same check to someone's own analysis repo. The page footer has a ready-made prompt to copy.
+
 ### Python users
 
 The generated Python code uses `pmsampsize` from PyPI (`pip install pmsampsize`, Python 3.12+). Version 0.1.0 has one bug: a survival model given a Nagelkerke R² raises `NameError: name 'exp' is not defined`. The generated code patches it in two lines when needed (`pmsampsize.pmsampsize.exp = math.exp`). With that patch, the Python package matches the R package on all 685 test cases. The snippets for getting cohort counts use pandas, and the likelihood-ratio hints cover lifelines (`CoxPHFitter`) and statsmodels (`Logit`).

@@ -1,0 +1,107 @@
+# Predictor Budget
+
+> How many candidate predictor parameters can a clinical prediction model developed on a fixed cohort support? This works Riley et al.'s minimum sample size criteria (the pmsampsize package) backwards, for time-to-event (Cox) and binary (logistic) outcomes. This file tells an AI assistant how to add the same check to a user's own R or Python analysis.
+
+Live tool: https://satsumalab.github.io/predictor-budget/
+Source and tests: https://github.com/satsumalab/predictor-budget (JavaScript port in `assets/pms.js`, R reference fixtures in `tests/`)
+
+## What to compute
+
+For each anticipated R² value, find the largest number of candidate parameters p for which `pmsampsize(...)$sample_size <= n`, where n is the cohort size. If even p = 1 needs more than n, the answer is 0. Report the base case and a sensitivity range (the tool uses R² × 0.8 and × 1.2).
+
+## Inputs and where they come from
+
+- Outcome type: `"s"` for time-to-event, `"b"` for binary. For continuous outcomes, use `pmsampsize(type = "c")` directly; this tool doesn't cover them.
+- n: patients in the analysis cohort. For binary outcomes, count only patients whose outcome is known.
+- events: patients with the outcome, using the same definition as the model.
+- Survival only:
+  - `rate = events / total_person_time`;
+  - `meanfup = total_person_time / n` (the mean, not the median);
+  - `timepoint` = the prediction horizon, in the same time units.
+- Binary only: `prevalence = events / n`.
+- shrinkage: 0.9 (default).
+- Anticipated R², from one of:
+  1. Nothing known: Nagelkerke R² = 0.15 (Riley's conservative default).
+  2. A previous model's likelihood-ratio χ² (LR), with its df, n_prev and E_prev:
+     - R²CS,app = 1 − exp(−LR / n_prev)
+     - S = 1 − df / LR
+     - R²CS,adj = S × R²CS,app (Riley 2019 Part II, eqs. 3–8)
+  3. A reported R². Convert Nagelkerke to Cox-Snell with the previous study's maximum, R²CS = R²Nag × maxR²CS. If the value is apparent (not optimism-corrected), shrink it as in option 2, with LR = −n_prev × ln(1 − R²CS,app).
+  4. A reported C statistic.
+     - Binary: `pmsampsize(type = "b", cstatistic = C, prevalence = ...)`.
+     - Survival (Harrell's C):
+       - D = 5.50(C − 0.5) + 10.26(C − 0.5)³
+       - R²D = (πD²/8) / (π²/6 + πD²/8)
+       - R²OQ = (π²/6)R²D / (1 − R²D + (π²/6)R²D)
+       - LR = −E_prev × ln(1 − R²OQ)
+       - Then shrink as in option 2, using the previous model's parameter count as df.
+- Maximum Cox-Snell R² for a study with E events among n (used to convert to Nagelkerke):
+  - survival: 1 − exp(2(E ln(E/n) − E)/n)
+  - binary: 1 − exp(2(E ln(E/n) + (n − E) ln(1 − E/n))/n)
+- Carry a previous study's R² into the new cohort either as Nagelkerke (`nagrsquared`, which pmsampsize rescales to the new event rate) or as Cox-Snell (`csrsquared`, unchanged). Say which one you used.
+
+## Counting parameters
+
+Count the degrees of freedom of every candidate predictor before any selection. Univariable screening on the outcome does not reduce the count.
+
+- binary or linear term: 1
+- categorical with k levels: k − 1
+- restricted cubic spline with k knots: k − 1
+- FP1: 2; FP2: 4
+- interactions: their own df
+
+## R template
+
+```r
+library(pmsampsize)
+n <- 500; events <- 60; total_py <- 2600          # survival example
+args <- list(type = "s", rate = events / total_py, meanfup = total_py / n,
+             timepoint = 5, shrinkage = 0.9)
+# binary: args <- list(type = "b", prevalence = events / n, shrinkage = 0.9)
+
+req_n <- function(p, r2) do.call(pmsampsize, c(args, list(nagrsquared = r2, parameters = p)))$sample_size
+max_p <- function(r2) { p <- 0; while (req_n(p + 1, r2) <= n) p <- p + 1; p }
+
+r2 <- c(0.12, 0.15, 0.18)
+data.frame(r2 = r2, max_parameters = sapply(r2, max_p))   # survival example: 3, 4, 5
+```
+
+## Python template
+
+```python
+# pip install pmsampsize   (Python 3.12+; official port by Whittle & Ensor)
+import math
+import pmsampsize.pmsampsize as _pms
+_pms.exp = math.exp  # pmsampsize 0.1.0 bug: survival + nagrsquared raises NameError
+                     # (https://github.com/RebeccaWhittle/pmsampsize/issues/1); harmless once fixed
+from pmsampsize.pmsampsize import pmsampsize
+
+n, events, total_py = 500, 60, 2600               # survival example
+args = dict(type="s", rate=events / total_py, meanfup=total_py / n, timepoint=5, shrinkage=0.9)
+# binary: args = dict(type="b", prevalence=events / n, shrinkage=0.9)
+
+def req_n(p, r2):
+    return pmsampsize(parameters=p, nagrsquared=r2, noprint=True, **args)["sample_size"]
+
+def max_p(r2):
+    p = 0
+    while req_n(p + 1, r2) <= n:
+        p += 1
+    return p
+
+for r2 in [0.12, 0.15, 0.18]:
+    print(r2, max_p(r2))                          # survival example: 3, 4, 5
+```
+
+## Things to get right
+
+- For survival, total follow-up and the horizon do not change the budget. Only events/n enters criteria 1 and 2. Criterion 3 (precision of overall risk at the horizon) is reported but never raises n. Check it separately on the real cohort: 95% CI of 1 − exp(−rate × t) with SE of the rate √(rate / person-time); the target margin is ≤ 0.05.
+- For binary outcomes, criterion 3 sets a floor: n ≥ (1.96/0.05)² × prevalence × (1 − prevalence). Below it, no model is supported.
+- Never put patient-level data into the calculation, and never send it anywhere. Only aggregate counts are needed.
+- To check your code, use the examples above (expected output in the comments) or the live tool, which shows the same numbers and generates code for the user's inputs.
+
+## References
+
+- Riley RD et al. Calculating the sample size required for developing a clinical prediction model. BMJ 2020;368:m441. https://doi.org/10.1136/bmj.m441
+- Riley RD et al. Minimum sample size for developing a multivariable prediction model: Part II, binary and time-to-event outcomes. Stat Med 2019;38:1276–96. https://doi.org/10.1002/sim.7992
+- pmsampsize (R): https://CRAN.R-project.org/package=pmsampsize · (Python): https://pypi.org/project/pmsampsize/

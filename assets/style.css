@@ -164,6 +164,12 @@ pre { margin: 0; background: var(--code-bg); border-radius: 4px; padding: 12px 1
 code { font: 400 0.9em var(--font-mono); background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
 .cite { font-size: 12.5px; color: var(--ink-3); }
 a { color: var(--accent); }
+.ai { margin-top: 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px 24px; align-items: start; }
+@media (max-width: 900px) { .ai { grid-template-columns: minmax(0, 1fr); } }
+.ai-text { display: grid; gap: 8px; }
+.ai-text p { margin: 0; color: var(--ink-2); font-size: 14px; max-width: 62ch; }
+.ai-prompt { display: grid; gap: 8px; justify-items: start; min-width: 0; width: 100%; }
+.ai-prompt pre { width: 100%; white-space: pre-wrap; }
 footer { margin-top: 28px; font-size: 12.5px; color: var(--ink-3); display: grid; gap: 4px; }
 .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
 .langrow { display: flex; gap: 8px 14px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
@@ -171,6 +177,6 @@ footer { margin-top: 28px; font-size: 12.5px; color: var(--ink-3); display: grid
 .lang button { border: 0; border-radius: 0; padding: 7px 14px; color: var(--ink-2); font-family: var(--font-mono); }
 .lang button + button { border-left: 1px solid var(--line); }
 .lang button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
-.lang-inline { display: inline-flex; vertical-align: 1px; margin-left: 6px; }
+.lang-inline { justify-self: start; }
 .lang-inline button { padding: 3px 9px; font-size: 12px; }
 @media (prefers-reduced-motion: no-preference) { #rows tr, .choice { transition: background .12s, border-color .12s; } }

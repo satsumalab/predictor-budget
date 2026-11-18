@@ -14,12 +14,12 @@ const MAX_SEARCH = 2000; // stop counting parameters here and report "2000+"
 
 const HOWTO = {
   r: {
-    s: `# d: one row per patient; time in days, status 1 = event\nn        <- nrow(d)\nevents   <- sum(d$status == 1)\ntotal_py <- sum(d$time) / 365.25`,
-    b: `# d: one row per patient; y 1 = outcome, 0 = none\nd      <- d[!is.na(d$y), ]\nn      <- nrow(d)\nevents <- sum(d$y == 1)`,
+    s: `# d: one row per patient\n# time in days; status 1 = event\nn        <- nrow(d)\nevents   <- sum(d$status == 1)\ntotal_py <- sum(d$time) / 365.25`,
+    b: `# d: one row per patient\n# y: 1 = outcome, 0 = none\nd      <- d[!is.na(d$y), ]\nn      <- nrow(d)\nevents <- sum(d$y == 1)`,
   },
   py: {
-    s: `# d: pandas DataFrame, one row per patient; time in days, status 1 = event\nn        = len(d)\nevents   = int((d["status"] == 1).sum())\ntotal_py = d["time"].sum() / 365.25`,
-    b: `# d: pandas DataFrame, one row per patient; y 1 = outcome, 0 = none\nd      = d.dropna(subset=["y"])\nn      = len(d)\nevents = int((d["y"] == 1).sum())`,
+    s: `# d: DataFrame, one row per patient\n# time in days; status 1 = event\nn        = len(d)\nevents   = int((d["status"] == 1).sum())\ntotal_py = d["time"].sum() / 365.25`,
+    b: `# d: DataFrame, one row per patient\n# y: 1 = outcome, 0 = none\nd      = d.dropna(subset=["y"])\nn      = len(d)\nevents = int((d["y"] == 1).sum())`,
   },
 };
 const LR_HINT = {
@@ -508,7 +508,8 @@ document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click"
   render();
 }));
 $("copyBtn").addEventListener("click",() => copy($("rcode").textContent, $("copyBtn"), "Copied"));
-$("linkBtn").addEventListener("click", () => copy(location.href, $("linkBtn"), "Link copied"));
+$("aiCopy").addEventListener("click", () => copy($("aiPrompt").textContent.replace(/\n(?=\S)/g, " "), $("aiCopy"), "Copied"));
+$("linkBtn").addEventListener("click",() => copy(location.href, $("linkBtn"), "Link copied"));
 $("resetBtn").addEventListener("click", () => { state = structuredClone(EXAMPLE); selected = null; writeForm(); render(); });
 $("form").addEventListener("input", e => { if (!e.target.closest(".pred")) render(); });
 $("form").addEventListener("change", e => { if (!e.target.closest(".pred")) render(); });

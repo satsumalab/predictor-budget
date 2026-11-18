@@ -223,6 +223,20 @@
     </div>
   </div>
 
+  <aside class="panel ai" aria-labelledby="h-ai">
+    <div class="ai-text">
+      <h2 id="h-ai">Using an AI coding assistant?</h2>
+      <p>Point it at <a href="llms.txt"><code>llms.txt</code></a>, a plain-text guide to the method with tested R and Python templates. For the full code and tests, use the <a href="https://github.com/satsumalab/predictor-budget">GitHub repo</a>. Give the assistant your cohort's counts only, never patient-level data.</p>
+    </div>
+    <div class="ai-prompt">
+      <pre id="aiPrompt">Read https://satsumalab.github.io/predictor-budget/llms.txt, then add a
+script to this project that calculates the maximum number of candidate
+predictor parameters my cohort supports, using pmsampsize. Ask me for
+the outcome type, counts and anticipated R² if you can't find them.</pre>
+      <button type="button" id="aiCopy">Copy prompt</button>
+    </div>
+  </aside>
+
   <footer>
     <span>Runs entirely in your browser. Nothing you type is sent anywhere.</span>
     <span>A JavaScript port of pmsampsize (Ensor, Martin &amp; Riley), released under GPL-3.0-or-later. <a href="https://github.com/satsumalab/predictor-budget">Source and tests on GitHub</a>.</span>
