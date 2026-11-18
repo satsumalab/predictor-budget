@@ -480,7 +480,7 @@ function renderMethods(out) {
   const K = out.planned;
   const planned = K == null ? "" : ` The planned model has ${plural(K, "candidate parameter")}, which is ${K <= baseRow.p ? "within" : "more than"} this budget.`;
   $("methodsText").textContent =
-    `The minimum sample size criteria of Riley et al. for developing a ${isS ? "time-to-event" : "binary outcome"} prediction model were applied in reverse to find the maximum number of candidate predictor parameters the available data support, using pmsampsize (version 1.1.3). The cohort comprised ${cohort}. The anticipated model performance was based on ${src}, giving ${r2txt}. With a target shrinkage factor of ${out.shrink}, ${budget}.${planned}`;
+    `The minimum sample size criteria of Riley et al. for developing a ${isS ? "time-to-event" : "binary outcome"} prediction model were applied in reverse to find the maximum number of candidate predictor parameters the available data support, using Predictor Budget v1.0.0 (https://satsumalab.github.io/predictor-budget/), a port of the pmsampsize R package checked against version 1.1.3. The cohort comprised ${cohort}. The anticipated model performance was based on ${src}, giving ${r2txt}. With a target shrinkage factor of ${out.shrink}, ${budget}.${planned}`;
 }
 
 function pythonCode({ out, c, s, arg, d, r2, base, K }) {
