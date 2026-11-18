@@ -17,7 +17,7 @@ It covers **time-to-event (Cox)** and **binary (logistic)** outcomes, and walks 
    - a published C statistic (Harrell's C for survival, AUC for binary)
 4. **Candidate predictors**: a counter that turns predictors into degrees of freedom (splines, categories, fractional polynomials, interactions)
 
-It then reports the parameter budget across a base case and sensitivity R² values, whether your planned predictors fit, a criterion-by-criterion breakdown, and R code that reproduces the result with pmsampsize. Everything runs in the browser and nothing is sent anywhere. The URL can hold a calculation so you can share it.
+It then reports the parameter budget across a base case and sensitivity R² values, whether your planned predictors fit, and a criterion-by-criterion breakdown. It also gives code that reproduces the result, with a switch between **R** ([pmsampsize on CRAN](https://CRAN.R-project.org/package=pmsampsize)) and **Python** ([pmsampsize on PyPI](https://pypi.org/project/pmsampsize/), the official port by Whittle and Ensor). Everything runs in the browser and nothing is sent anywhere. The URL can hold a calculation so you can share it.
 
 ## Accuracy
 
@@ -33,6 +33,10 @@ npm test                          # Node 18+; no dependencies
 Rscript tests/make_fixtures.R     # regenerate fixtures (needs pmsampsize, jsonlite)
 python3 -m http.server            # then open http://localhost:8000
 ```
+
+### Python users
+
+The generated Python code uses `pmsampsize` from PyPI (`pip install pmsampsize`, Python 3.12+). Version 0.1.0 has one bug: a survival model given a Nagelkerke R² raises `NameError: name 'exp' is not defined`. The generated code patches it in two lines when needed (`pmsampsize.pmsampsize.exp = math.exp`). With that patch, the Python package matches the R package on all 685 test cases. The snippets for getting cohort counts use pandas, and the likelihood-ratio hints cover lifelines (`CoxPHFitter`) and statsmodels (`Logit`).
 
 ## Things worth knowing
 

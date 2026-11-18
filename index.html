@@ -35,7 +35,7 @@
           <label><input type="radio" name="outcome" value="s">Time to event<small>Cox model · OS, PFS, recurrence</small></label>
           <label><input type="radio" name="outcome" value="b">Yes / no<small>Logistic model · e.g. 30-day mortality</small></label>
         </div>
-        <span class="hint">For a continuous outcome use <code>pmsampsize(type = "c")</code> in R directly. If everyone is followed to a fixed time with no censoring, a binary model is usually the right choice.</span>
+        <span class="hint">For a continuous outcome use <code>pmsampsize(type = "c")</code> in R or Python directly. If everyone is followed to a fixed time with no censoring, a binary model is usually the right choice.</span>
       </section>
 
       <!-- 2 -->
@@ -54,6 +54,9 @@
         <details>
           <summary>How do I get these numbers from my data?</summary>
           <div class="body">
+            <div class="lang lang-inline" role="group" aria-label="Code language">
+              <button type="button" data-lang="r" aria-pressed="true">R</button><button type="button" data-lang="py" aria-pressed="false">Python</button>
+            </div>
             <pre id="howto"></pre>
             <span class="hint" data-outcome="s">Use the same outcome definition and censoring as the model you will fit. If you have competing risks, this calculation does not account for them.</span>
           </div>
@@ -77,7 +80,7 @@
         </div>
         <div class="sub" data-source="lr">
           <div class="field"><label for="lrStat">Likelihood-ratio χ²</label><input type="number" id="lrStat" min="0" step="any">
-            <span class="hint">In R: <code>summary(fit)$logtest</code> for <code>coxph</code>, or null deviance − residual deviance for <code>glm</code>.</span></div>
+            <span class="hint" id="lrHint"></span></div>
         </div>
         <div class="sub" data-source="reported">
           <div class="row2">
@@ -190,8 +193,14 @@
       </section>
 
       <section class="panel" aria-labelledby="h-r">
-        <div class="secthead"><h2 id="h-r">Reproduce in R</h2>
+        <div class="secthead"><h2 id="h-r">Reproduce in code</h2>
           <div class="btnrow"><button type="button" id="linkBtn">Copy link to this calculation</button><button type="button" id="copyBtn">Copy code</button></div></div>
+        <div class="langrow">
+          <div class="lang" role="group" aria-label="Code language">
+            <button type="button" data-lang="r" aria-pressed="true">R</button><button type="button" data-lang="py" aria-pressed="false">Python</button>
+          </div>
+          <span class="hint" id="langNote"></span>
+        </div>
         <pre id="rcode"></pre>
       </section>
 

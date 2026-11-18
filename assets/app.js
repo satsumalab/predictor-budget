@@ -12,6 +12,21 @@ const KINDS = [
 const NEEDS_K = { spline: "knots", categorical: "levels", custom: "df" };
 const MAX_SEARCH = 2000; // stop counting parameters here and report "2000+"
 
+const HOWTO = {
+  r: {
+    s: `# d: one row per patient; time in days, status 1 = event\nn        <- nrow(d)\nevents   <- sum(d$status == 1)\ntotal_py <- sum(d$time) / 365.25`,
+    b: `# d: one row per patient; y 1 = outcome, 0 = none\nd      <- d[!is.na(d$y), ]\nn      <- nrow(d)\nevents <- sum(d$y == 1)`,
+  },
+  py: {
+    s: `# d: pandas DataFrame, one row per patient; time in days, status 1 = event\nn        = len(d)\nevents   = int((d["status"] == 1).sum())\ntotal_py = d["time"].sum() / 365.25`,
+    b: `# d: pandas DataFrame, one row per patient; y 1 = outcome, 0 = none\nd      = d.dropna(subset=["y"])\nn      = len(d)\nevents = int((d["y"] == 1).sum())`,
+  },
+};
+const LR_HINT = {
+  r: `In R: <code>summary(fit)$logtest</code> for <code>coxph</code>. For <code>glm</code>, use <code>fit$null.deviance - fit$deviance</code>.`,
+  py: `In Python: <code>cph.log_likelihood_ratio_test().test_statistic</code> for a lifelines <code>CoxPHFitter</code>, or <code>res.llr</code> for a statsmodels <code>Logit</code> fit. Its df is <code>.degrees_freedom</code> or <code>res.df_model</code>.`,
+};
+
 const EXAMPLE = Object.freeze({
   outcome: "s", n: 500, events: 60, py: 2600, tp: 5,
   source: "none", nagDefault: 0.15, lrStat: 26.4, repValue: 0.2, repScale: "nag", repApparent: "app", cValue: 0.72,
@@ -24,6 +39,7 @@ const EXAMPLE = Object.freeze({
 });
 
 let state = loadFromHash() || structuredClone(EXAMPLE);
+let lang = (() => { try { return localStorage.getItem("pb-lang") === "py" ? "py" : "r"; } catch { return "r"; } })();
 let selected = null; // R² value of the selected table row
 
 // ---------------------------------------------------------------- form <-> state
@@ -208,9 +224,12 @@ function render() {
   $("cLabel").textContent = isS ? "Harrell's C" : "C statistic (AUC)";
   $("exampleBanner").hidden = !isExample();
   for (const k of FIELDS) $(k).classList.toggle("invalid", out.bad.has(k));
-  $("howto").textContent = isS
-    ? `# d: one row per patient; time in days, status 1 = event\nn        <- nrow(d)\nevents   <- sum(d$status == 1)\ntotal_py <- sum(d$time) / 365.25`
-    : `# d: one row per patient; y 1 = outcome, 0 = none\nd      <- d[!is.na(d$y), ]\nn      <- nrow(d)\nevents <- sum(d$y == 1)`;
+  document.querySelectorAll("[data-lang]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  $("howto").textContent = HOWTO[lang][s.outcome];
+  $("lrHint").innerHTML = LR_HINT[lang];
+  $("langNote").innerHTML = lang === "py"
+    ? `Uses the official <a href="https://pypi.org/project/pmsampsize/">pmsampsize</a> Python package (<code>pip install pmsampsize</code>, Python 3.12+).`
+    : `Uses the <a href="https://CRAN.R-project.org/package=pmsampsize">pmsampsize</a> R package.`;
 
   renderBase(out);
   $("errors").innerHTML = out.errs.map(e => `<div class="msg bad">${esc(e)}</div>`).join("");
@@ -397,12 +416,13 @@ function renderChart(out) {
 
 function renderR(out) {
   const c = out.cohort, s = state;
-  if (!c || !out.rows.length) { $("rcode").textContent = "# Fill in the inputs to generate R code."; return; }
+  if (!c || !out.rows.length) { $("rcode").textContent = "# Fill in the inputs to generate code."; return; }
   const arg = out.scale === "nag" ? "nagrsquared" : "csrsquared";
   const d = out.scale === "nag" ? 3 : 4;
   const r2 = out.rows.map(r => fmt(r.v, d)).join(", ");
   const base = out.rows.find(r => r.role === "base") || out.rows[0];
   const K = out.planned ?? (base.p || 1);
+  if (lang === "py") { $("rcode").textContent = pythonCode({ out, c, s, arg, d, r2, base, K }); return; }
   const head = out.outcome === "s"
     ? `n <- ${c.n}; events <- ${c.events}; total_py <- ${c.py}\nargs <- list(type = "s", rate = events / total_py, meanfup = total_py / n,\n             timepoint = ${c.tp}, shrinkage = ${out.shrink})`
     : `n <- ${c.n}; events <- ${c.events}\nargs <- list(type = "b", prevalence = events / n, shrinkage = ${out.shrink})`;
@@ -419,6 +439,37 @@ data.frame(r2 = r2, max_parameters = sapply(r2, max_p))
 
 # Full output for ${plural(K, "parameter")} at the base-case R²
 do.call(pmsampsize, c(args, list(${arg} = ${fmt(base.v, d)}, parameters = ${K})))${cNote}`;
+}
+
+function pythonCode({ out, c, s, arg, d, r2, base, K }) {
+  // pmsampsize 0.1.0 calls a bare exp() on the survival + Nagelkerke path (NameError); patch it in.
+  const patch = out.outcome === "s" && out.scale === "nag"
+    ? `import math\nimport pmsampsize.pmsampsize as _pms\n_pms.exp = math.exp  # works around a NameError in pmsampsize 0.1.0 (survival + Nagelkerke R²)\n`
+    : "";
+  const head = out.outcome === "s"
+    ? `n, events, total_py = ${c.n}, ${c.events}, ${c.py}\nargs = dict(type="s", rate=events / total_py, meanfup=total_py / n,\n            timepoint=${c.tp}, shrinkage=${out.shrink})`
+    : `n, events = ${c.n}, ${c.events}\nargs = dict(type="b", prevalence=events / n, shrinkage=${out.shrink})`;
+  const cNote = s.source === "cstat" && out.outcome === "b" && out.scale === "cs"
+    ? `\n\n# pmsampsize can also convert the C statistic itself (simulation, may differ slightly):\n# pmsampsize(type="b", cstatistic=${s.cValue}, prevalence=events / n, parameters=${K})` : "";
+  return `# pip install pmsampsize   (Python 3.12+)
+${patch}from pmsampsize.pmsampsize import pmsampsize
+
+${head}
+
+def req_n(p, r2):
+    return pmsampsize(parameters=p, ${arg}=r2, noprint=True, **args)["sample_size"]
+
+def max_p(r2):
+    p = 0
+    while req_n(p + 1, r2) <= n:
+        p += 1
+    return p
+
+for r2 in [${r2}]:
+    print(f"R² {r2}: up to {max_p(r2)} parameters")
+
+# Full output for ${plural(K, "parameter")} at the base-case R²
+pmsampsize(parameters=${K}, ${arg}=${fmt(base.v, d)}, **args)${cNote}`;
 }
 
 // ---------------------------------------------------------------- example, sharing, copy
@@ -451,7 +502,12 @@ async function copy(text, btn, done) {
   catch { btn.textContent = "Copy failed. Select and copy manually"; }
   setTimeout(() => (btn.textContent = label), 1800);
 }
-$("copyBtn").addEventListener("click", () => copy($("rcode").textContent, $("copyBtn"), "Copied"));
+document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click", () => {
+  lang = b.dataset.lang;
+  try { localStorage.setItem("pb-lang", lang); } catch { }
+  render();
+}));
+$("copyBtn").addEventListener("click",() => copy($("rcode").textContent, $("copyBtn"), "Copied"));
 $("linkBtn").addEventListener("click", () => copy(location.href, $("linkBtn"), "Link copied"));
 $("resetBtn").addEventListener("click", () => { state = structuredClone(EXAMPLE); selected = null; writeForm(); render(); });
 $("form").addEventListener("input", e => { if (!e.target.closest(".pred")) render(); });
