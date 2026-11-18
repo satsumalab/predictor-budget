@@ -50,8 +50,7 @@ test("Riley 2019 Part II, survival example: R²CS 0.051, 25 parameters -> 4286",
 });
 
 test("Riley 2019 Part II, binary example: R²CS 0.288, 24 parameters, prevalence 0.174", () => {
-  // The paper reports 623 / 668 / 221. pmsampsize 1.1.3 gives 662 for criterion 2 (checked in R),
-  // presumably from intermediate rounding in the paper's hand calculation. We match the package.
+  // The paper prints 623 / 668 / 221. pmsampsize 1.1.3 gives 623 / 662 / 221 (checked in R); we follow the package.
   const o = P.pmsampsize({ type: "b", csrsquared: 0.288, parameters: 24, prevalence: 0.174 });
   assert.deepEqual(o.criteria.map(c => c.n), [623, 662, 221]);
   assert.equal(o.sampleSize, 662);

@@ -10,6 +10,7 @@ const KINDS = [
   ["fp1", "FP1"], ["fp2", "FP2"], ["categorical", "Categorical"], ["custom", "Other df"],
 ];
 const NEEDS_K = { spline: "knots", categorical: "levels", custom: "df" };
+const MAX_SEARCH = 2000; // stop counting parameters here and report "2000+"
 
 const EXAMPLE = Object.freeze({
   outcome: "s", n: 500, events: 60, py: 2600, tp: 5,
@@ -44,7 +45,7 @@ function renderPredictors() {
     <div class="pred" data-i="${i}">
       <input type="text" id="pname-${i}" aria-label="Predictor ${i + 1} name" value="${esc(p.name || "")}" placeholder="Name">
       <select id="pkind-${i}" aria-label="Predictor ${i + 1} form">${KINDS.map(([v, t]) => `<option value="${v}"${v === p.kind ? " selected" : ""}>${t}</option>`).join("")}</select>
-      <input type="number" id="pk-${i}" aria-label="Predictor ${i + 1} ${NEEDS_K[p.kind] || "levels"}" min="1" step="1" value="${p.k ?? ""}" ${NEEDS_K[p.kind] ? "" : "hidden"} placeholder="${NEEDS_K[p.kind] || ""}">
+      <input type="number" id="pk-${i}" aria-label="Predictor ${i + 1} ${NEEDS_K[p.kind] || "levels"}" min="1" step="1" value="${esc(p.k ?? "")}" ${NEEDS_K[p.kind] ? "" : "hidden"} placeholder="${NEEDS_K[p.kind] || ""}">
       ${NEEDS_K[p.kind] ? "" : "<span></span>"}
       <span class="df" id="pdf-${i}"></span>
       <button type="button" class="icon" data-remove="${i}" aria-label="Remove ${esc(p.name || "predictor")}">×</button>
@@ -167,7 +168,7 @@ function compute(s) {
     ...(outcome === "s" ? { rate: cohort?.rate, meanfup: cohort?.meanfup, timepoint: tp } : { prevalence: cohort?.prevalence }),
   });
   const rows = cohort && shrinkOk ? r2s.map((r, i) => {
-    try { return { ...r, i, ...P.maxParameters(n, argsFor(r.v)) }; }
+    try { const m = P.maxParameters(n, argsFor(r.v), MAX_SEARCH); return { ...r, i, ...m, capped: m.p >= MAX_SEARCH }; }
     catch (e) { return { ...r, i, error: e.message }; }
   }) : [];
 
@@ -259,7 +260,9 @@ function renderVerdict(out, baseRow) {
       : `One parameter would need ${baseRow.next.sampleSize} patients at this R². You have ${out.cohort.n}.`);
     pills.push(`<span class="pill bad">Cohort too small</span>`);
   } else {
-    head.innerHTML = `Your cohort supports up to <em>${plural(P0, "candidate parameter")}</em>`;
+    head.innerHTML = baseRow.capped
+      ? `Your cohort supports <em>more than ${MAX_SEARCH} candidate parameters</em>`
+      : `Your cohort supports up to <em>${plural(P0, "candidate parameter")}</em>`;
     text.push(`At the base-case R², ${plural(P0, "parameter")} need ${baseRow.atMax.sampleSize} patients and you have ${out.cohort.n}.` +
       (lo !== hi ? ` Across the R² values tried the budget ranges from ${lo} to ${hi}.` : ""));
   }
@@ -297,7 +300,7 @@ function renderTable(out) {
     if (r.error) return `<tr ${attrs}><td>${rowLabel(r)}</td><td colspan="6" class="txt" style="text-align:left;white-space:normal"><span class="pill bad">${esc(r.error)}</span></td></tr>`;
     const lim = r.atMax ? r.atMax.binding : r.next.binding;
     return `<tr ${attrs}><td>${rowLabel(r)}</td><td>${fmt(r.next.r2cs, 4)}</td>
-      <td class="big">${r.p === 0 ? '<span class="pill bad">0</span>' : r.p}</td>
+      <td class="big">${r.p === 0 ? '<span class="pill bad">0</span>' : r.capped ? `${r.p}+` : r.p}</td>
       <td>${r.atMax ? r.atMax.sampleSize : "–"}</td><td>${r.next.sampleSize}</td>
       <td>${r.atMax ? fmt(r.atMax.epp, 1) : "–"}</td><td class="txt">Criterion ${lim}</td></tr>`;
   }).join("");
@@ -436,7 +439,9 @@ function loadFromHash() {
     const data = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
     const s = structuredClone(EXAMPLE);
     for (const k of [...FIELDS, ...RADIOS]) if (k in data) s[k] = data[k];
-    if (Array.isArray(data.predictors)) s.predictors = data.predictors.filter(p => p && KINDS.some(([v]) => v === p.kind)).map(p => ({ name: String(p.name ?? ""), kind: p.kind, k: p.k }));
+    if (Array.isArray(data.predictors)) s.predictors = data.predictors.filter(p => p && KINDS.some(([v]) => v === p.kind)).map(p => ({ name: String(p.name ?? "").slice(0, 80), kind: p.kind, k: Number.isFinite(Number(p.k)) && p.k !== "" && p.k != null ? Number(p.k) : undefined }));
+    for (const k of ["outcome", "source", "repScale", "repApparent", "scale"]) if (typeof s[k] !== "string") s[k] = EXAMPLE[k];
+    s.sens = !!s.sens;
     return s;
   } catch { return null; }
 }
